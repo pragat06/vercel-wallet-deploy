@@ -49,7 +49,7 @@ export default function App() {
       privateKey: wallet.privateKey,
       mnemonic: wallet.mnemonic.phrase,
     };
-    const res = await fetch("http://localhost:5000/api/wallet", {
+    const res = await fetch("/api/wallet", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newWallet),
@@ -60,7 +60,7 @@ export default function App() {
 
   const fetchWallets = async () => {
     if (!username || !password) return alert("Username and password are required!");
-    const res = await fetch(`http://localhost:5000/api/wallet/fetch`, {
+    const res = await fetch(`/api/wallet/fetch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
@@ -251,7 +251,7 @@ const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
     setIsVerifying(true);
     setVerificationResult(null);
     try {
-      const response = await fetch("http://localhost:5000/api/verify-tx", {
+      const response = await fetch("/api/verify-tx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash, adminWalletAddress }),
@@ -276,7 +276,7 @@ const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
 
     try {
       setIsHistoryLoading(true);
-      const res = await fetch(`http://localhost:5000/api/tx-history/${username}`);
+      const res = await fetch(`/api/history/${username}`);
       if (!res.ok) {
         // If user has no history yet, the server might send a 404, which is fine.
         setTransactionHistory([]);
@@ -295,7 +295,7 @@ const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
     // In App.jsx
 const updateTransactionStatus = async (txHash, status) => {
   try {
-    await fetch("http://localhost:5000/api/tx-status", {
+    await fetch("/api/tx-status", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ txHash, status }),
