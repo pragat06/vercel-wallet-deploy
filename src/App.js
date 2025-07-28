@@ -276,7 +276,7 @@ const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
 
     try {
       setIsHistoryLoading(true);
-      const res = await fetch(`/api/history/${username}`);
+      const res = await fetch(`/api/tx-history/${username}`);
       if (!res.ok) {
         // If user has no history yet, the server might send a 404, which is fine.
         setTransactionHistory([]);
