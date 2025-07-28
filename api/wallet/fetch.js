@@ -1,11 +1,10 @@
 // /api/wallet/fetch.js
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-// The path is now corrected to match your folder structure
+// This path must match your folder structure exactly.
+// Your folder is named 'model' (singular), not 'models'.
 import Wallet from '../../model/Wallet.js'; 
 
-// Helper to connect to the database
 async function connectToDatabase() {
   if (mongoose.connection.readyState >= 1) {
     return;
@@ -14,12 +13,10 @@ async function connectToDatabase() {
 }
 
 export default async function handler(req, res) {
-  // This function only allows POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  // This is your logic for fetching wallets
   try {
     await connectToDatabase();
     const { username, password } = req.body;
@@ -38,7 +35,7 @@ export default async function handler(req, res) {
     res.status(200).json(userWallets);
 
   } catch (error) {
-    console.error("Error fetching wallets:", error);
-    res.status(500).json({ message: "Error fetching wallets" });
+    console.error("CRASH REPORT:", error); // Added a more obvious log message
+    res.status(500).json({ message: "Server crashed", error: error.message });
   }
 }
