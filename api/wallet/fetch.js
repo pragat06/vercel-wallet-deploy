@@ -1,14 +1,9 @@
-// /api/wallet/fetch.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-// This path must match your folder structure exactly.
-// Your folder is named 'model' (singular), not 'models'.
-import Wallet from '../../model/Wallet.js'; 
+import Wallet from '../../model/Wallet.js';
 
 async function connectToDatabase() {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
+  if (mongoose.connection.readyState >= 1) return;
   return mongoose.connect(process.env.MONGO_URI);
 }
 
@@ -31,11 +26,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    const userWallets = await Wallet.find({ username }).select('-password');
+    const userWallets = await Wallet.find({ username }).select('-password -__v');
     res.status(200).json(userWallets);
 
   } catch (error) {
-    console.error("CRASH REPORT:", error); // Added a more obvious log message
+    console.error("CRASH REPORT in fetch.js:", error);
     res.status(500).json({ message: "Server crashed", error: error.message });
   }
 }
