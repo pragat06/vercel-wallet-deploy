@@ -4,12 +4,55 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const { ethers } = require("ethers");
-const Transaction = require('./Transaction');
-const Wallet = require('./Wallet');
 
+// --- Define Mongoose Schemas and Models ---
+
+// Wallet Schema (from Wallet.js)
+const walletSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  address: String,
+  privateKey: String,
+  mnemonic: String,
+});
+const Wallet = mongoose.model('Wallet', walletSchema);
+
+
+// Transaction Schema (from Transaction.js)
+const transactionSchema = new mongoose.Schema({
+  txHash: { type: String, required: true, unique: true },
+  from: { type: String, required: true },
+  to: { type: String, required: true },
+  amount: { type: String, required: true },
+  tokenSymbol: { type: String, required: true },
+  status: {
+    type: String,
+    required: true,
+    enum: ['pending', 'success', 'failed'], // Only allow these values
+    default: 'pending'
+  },
+  timestamp: { type: Date, default: Date.now },
+});
+const Transaction = mongoose.model('Transaction', transactionSchema);
+
+
+// --- Initialize Express App ---
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// --- CORS Configuration ---
+// This is the likely fix for the "Failed to fetch" error.
+// It explicitly allows your React app (running on localhost:3000)
+// to make requests to this server (running on localhost:5000).
+const corsOptions = {
+  origin: "http://localhost:3000", // The origin of your frontend app
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allowed request methods
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
+
+
+app.use(express.json()); // Middleware to parse JSON bodies
 
 // --- Define constants and the Ethers provider ---
 const RPC_URL = "https://data-seed-prebsc-1-s1.binance.org:8545";
@@ -29,7 +72,11 @@ mongoose.connect("mongodb+srv://pragatchari06:LRmzbYUjkpif0nhc@cluster0.ghbszlz.
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-// --- POST: Save wallet ---
+
+
+// --- API Endpoints ---
+
+// POST: Save a new wallet
 app.post("/api/wallet", async (req, res) => {
   try {
     const { username, password, address, privateKey, mnemonic } = req.body;
@@ -52,7 +99,8 @@ app.post("/api/wallet", async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 });
-// --- POST: Fetch latest wallet ---
+
+// POST: Fetch wallets for a user
 app.post("/api/wallet/fetch", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -77,9 +125,8 @@ app.post("/api/wallet/fetch", async (req, res) => {
   }
 });
 
+// POST: Verify a transaction
 app.post("/api/verify-tx", async (req, res) => {
-  
-
   const { txHash, adminWalletAddress } = req.body;
 
   if (!txHash || !adminWalletAddress) {
@@ -94,7 +141,7 @@ app.post("/api/verify-tx", async (req, res) => {
     }
 
     const isFromAdmin = tx.from.toLowerCase() === adminWalletAddress.toLowerCase();
-    
+
     let txDetails = {};
 
     if (tx.value > 0) {
@@ -104,16 +151,15 @@ app.post("/api/verify-tx", async (req, res) => {
         amount: ethers.formatEther(tx.value),
         tokenSymbol: "BNB",
       };
-    } 
+    }
     else if (tx.data && tx.data.startsWith(ERC20_TRANSFER_SIGNATURE)) {
-      // ✅ --- ADDED A an inner try/catch block to prevent the server from ever crashing --- ✅
       try {
         const iface = new ethers.Interface(erc20ABI);
         const decodedData = iface.parseTransaction({ data: tx.data });
 
         if (decodedData && decodedData.name === "transfer") {
           const tokenContract = new ethers.Contract(tx.to, erc20ABI, provider);
-          
+
           const [tokenSymbol, tokenDecimals] = await Promise.all([
             tokenContract.symbol(),
             tokenContract.decimals()
@@ -126,11 +172,9 @@ app.post("/api/verify-tx", async (req, res) => {
             tokenSymbol: tokenSymbol,
           };
         } else {
-          // If decoding succeeds but it's not a transfer function, treat as a complex interaction
           throw new Error("Decoded but not a simple transfer function.");
         }
       } catch (innerError) {
-        // If any part of the token parsing fails, we fall back gracefully here
         console.error("Could not parse as ERC20 transfer, falling back:", innerError.message);
         txDetails = {
           from: tx.from,
@@ -148,11 +192,11 @@ app.post("/api/verify-tx", async (req, res) => {
         tokenSymbol: "Contract Interaction",
       };
     }
-    
+
     res.json({
       isValid: isFromAdmin,
-      message: isFromAdmin 
-        ? "✅ SUCCESS: Transaction was sent from the specified admin wallet." 
+      message: isFromAdmin
+        ? "✅ SUCCESS: Transaction was sent from the specified admin wallet."
         : "❌ FAILED: This transaction was NOT sent by the specified admin wallet.",
       details: txDetails,
     });
@@ -165,11 +209,12 @@ app.post("/api/verify-tx", async (req, res) => {
     });
   }
 });
+
+// POST: Save transaction history
 app.post("/api/tx-history", async (req, res) => {
   try {
     const { txHash, from, to, amount, tokenSymbol } = req.body;
 
-    // Basic validation
     if (!txHash || !from || !to || !amount || !tokenSymbol) {
       return res.status(400).json({ message: "Missing required transaction fields." });
     }
@@ -186,7 +231,6 @@ app.post("/api/tx-history", async (req, res) => {
     res.status(201).json({ message: "Transaction saved successfully.", transaction: newTransaction });
 
   } catch (error) {
-    // Handle potential duplicate key error for txHash
     if (error.code === 11000) {
       return res.status(409).json({ message: "This transaction hash has already been saved." });
     }
@@ -195,6 +239,7 @@ app.post("/api/tx-history", async (req, res) => {
   }
 });
 
+// GET: Fetch transaction history for a user
 app.get("/api/tx-history/:username", async (req, res) => {
   try {
     const { username } = req.params;
@@ -216,15 +261,12 @@ app.get("/api/tx-history/:username", async (req, res) => {
     res.status(500).json({ message: "Server error while fetching transaction history." });
   }
 });
-// backend/server.js
-// ... (after your other routes)
 
-// --- PUT: Update the status of a transaction ---
+// PUT: Update the status of a transaction
 app.put("/api/tx-status", async (req, res) => {
   try {
     const { txHash, status } = req.body;
 
-    // Basic validation
     if (!txHash || !status) {
       return res.status(400).json({ message: "Transaction hash and status are required." });
     }
@@ -250,7 +292,10 @@ app.put("/api/tx-status", async (req, res) => {
   }
 });
 
-app.listen(5000, () => {
-  console.log("Server running on http://localhost:5000");
+
+// --- Start Server ---
+const PORT = 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
   console.log("Robust verification endpoint is live at POST /api/verify-tx");
 });
