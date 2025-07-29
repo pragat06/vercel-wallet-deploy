@@ -58,14 +58,24 @@ export default function App() {
     alert(result.message);
   };
 
-  const fetchWallets = async () => {
-    if (!username || !password) return alert("Username and password are required!");
+// App.jsx
+const fetchWallets = async () => {
+  if (!username || !password) return alert("Username and password are required!");
+
+  try {
     const res = await fetch(`/api/wallet/fetch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-    const data = await res.json();
+
+    // ✅ CHECK if the request was successful (status 200-299)
+    if (!res.ok) {
+      // Throw an error to be caught by the catch block
+      throw new Error(`Server responded with status: ${res.status}`);
+    }
+
+    const data = await res.json(); // Now this is safe to call
     if (data.error) {
       alert(data.error);
       setWalletData([]);
@@ -73,9 +83,13 @@ export default function App() {
       setWalletData(data);
       fetchTransactionHistory();
     }
-  };
-
-  const getBNBBalance = async (address) => {
+  } catch (error) {
+    console.error("Failed to fetch wallets:", error);
+    alert("Could not fetch wallets. " + error.message);
+    setWalletData([]);
+  }
+};
+  getBNBBalance = async (address) => {
     try {
       const balance = await provider.getBalance(address);
       setBnbBalances((p) => ({ ...p, [address]: ethers.formatEther(balance) }));
