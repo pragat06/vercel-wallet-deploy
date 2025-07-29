@@ -509,27 +509,27 @@ const updateTransactionStatus = async (txHash, status) => {
       transactionHistory.filter(tx => tx.from.toLowerCase() === w.address.toLowerCase()).length > 0 ? (
         transactionHistory
           .filter(tx => tx.from.toLowerCase() === w.address.toLowerCase())
+.map(tx => (
+    <div key={tx.txHash} className={`history-item status-${tx.status}`}>
+      <div className="history-item-row">
+        <span>
+          {tx.status === 'success' && '✅ '}
+          {tx.status === 'pending' && '⏳ '}
+          {tx.status === 'failed' && '❌ '}
+          Status:
+        </span>
+        <span className={`status-text status-${tx.status}`}>{tx.status}</span>
+      </div>
 
-       .map(tx => (
-  <div key={tx.txHash} className={`history-item status-${tx.status}`}>
-    <div className="history-item-row">
-      <span>
-        {tx.status === 'success' && '✅ '}
-        {tx.status === 'pending' && '⏳ '}
-        {tx.status === 'failed' && '❌ '}
-        Status:
-      </span>
-      <span className={`status-text status-${tx.status}`}>{tx.status}</span>
-    </div>
+      <div className="history-item-row">
+        <span>To:</span>
+        <span className="history-address">{tx.to.slice(0, 6)}...{tx.to.slice(-4)}</span>
+      </div>
+      <div className="history-item-row">
+        <span>Amount:</span>
+        <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
+      </div>
 
-    <div className="history-item-row">
-      <span>To:</span>
-      <span className="history-address">{tx.to.slice(0, 6)}...{tx.to.slice(-4)}</span>
-    </div>
-    <div className="history-item-row">
-      <span>Amount:</span>
-      <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
-    </div>
     <a 
      href={`https://testnet.bscscan.com/tx/${tx.txHash}`}
       target="_blank"
