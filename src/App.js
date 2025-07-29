@@ -124,6 +124,7 @@ const sendBNB = async (pk) => {
       tokenSymbol: 'BNB',
       status: 'pending',
     });
+     fetchTransactionHistory();
        tx.wait()
       .then(async (receipt) => {
         // SUCCESS CASE
@@ -529,7 +530,12 @@ const updateTransactionStatus = async (txHash, status) => {
       <span>Amount:</span>
       <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
     </div>
-    <a /* ... a-tag as before ... */ >
+    <a 
+     href={`https://testnet.bscscan.com/tx/${tx.txHash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="history-link"
+    >
       View on BscScan
     </a>
   </div>
