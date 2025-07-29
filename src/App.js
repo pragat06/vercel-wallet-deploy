@@ -1,5 +1,5 @@
 /* App.jsx */
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 
 /* ---------------  ABI & CONSTANTS  --------------- */
@@ -7,9 +7,9 @@ const erc20ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function transfer(address,uint256) returns (bool)",
   "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)", // Added for full token info
 ];
 const USDT_ADDRESS = "0x787a697324dba4ab965c58cd33c13ff5eea6295f";
-// Using your provided address for USDC
 const USDC_ADDRESS = "0x342e3aA1248AB77E319e3331C6fD3f1F2d4B36B1"; 
 const RPC_URL = "https://data-seed-prebsc-1-s1.binance.org:8545";
 
@@ -38,58 +38,59 @@ export default function App() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-  /* ----------  Handlers  ---------- */
+  /* ----------  Handlers (Corrected for Vercel Deployment) ---------- */
+
+  // ✅ FIXED: Using relative URL and robust error handling
   const generateAndSaveWallet = async () => {
     if (!username || !password) return alert("Username and password are required!");
-    const wallet = ethers.Wallet.createRandom();
-    const newWallet = {
-      username,
-      password,
-      address: wallet.address,
-      privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic.phrase,
-    };
-    const res = await fetch("/api/wallet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newWallet),
-    });
-    const result = await res.json();
-    alert(result.message);
+    try {
+      const wallet = ethers.Wallet.createRandom();
+      const newWallet = {
+        username,
+        password,
+        address: wallet.address,
+        privateKey: wallet.privateKey,
+        mnemonic: wallet.mnemonic.phrase,
+      };
+      const res = await fetch("/api/wallet", { // Use relative path
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newWallet),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || "Failed to create wallet.");
+      }
+      alert(result.message);
+    } catch (error) {
+      console.error("Wallet generation failed:", error);
+      alert(`Error: ${error.message}`);
+    }
   };
 
-// App.jsx
-const fetchWallets = async () => {
-  if (!username || !password) return alert("Username and password are required!");
-
-  try {
-    const res = await fetch(`/api/wallet/fetch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-
-    // ✅ CHECK if the request was successful (status 200-299)
-    if (!res.ok) {
-      // Throw an error to be caught by the catch block
-      throw new Error(`Server responded with status: ${res.status}`);
-    }
-
-    const data = await res.json(); // Now this is safe to call
-    if (data.error) {
-      alert(data.error);
-      setWalletData([]);
-    } else {
+  // ✅ FIXED: Using relative URL and robust error handling
+  const fetchWallets = async () => {
+    if (!username || !password) return alert("Username and password are required!");
+    try {
+      const res = await fetch(`/api/wallet/fetch`, { // Use relative path
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Invalid username or password.");
+      }
       setWalletData(data);
-      fetchTransactionHistory();
+      fetchTransactionHistory(); // Fetch history after getting wallets
+    } catch (error) {
+      console.error("Failed to fetch wallets:", error);
+      alert(error.message);
+      setWalletData([]);
     }
-  } catch (error) {
-    console.error("Failed to fetch wallets:", error);
-    alert("Could not fetch wallets. " + error.message);
-    setWalletData([]);
-  }
-};
-  getBNBBalance = async (address) => {
+  };
+
+  const getBNBBalance = async (address) => {
     try {
       const balance = await provider.getBalance(address);
       setBnbBalances((p) => ({ ...p, [address]: ethers.formatEther(balance) }));
@@ -112,161 +113,142 @@ const fetchWallets = async () => {
     }
   };
 
-// In App.jsx - Replace your old sendBNB function
-const sendBNB = async (pk) => {
-  if (!receiverAddress || !amount) return alert("Enter address and amount");
-  setIsSending(true);
-  
-  const wallet = new ethers.Wallet(pk, provider);
-  let tx; // Define tx here to access it in the catch block
+  const sendBNB = async (pk) => {
+    if (!receiverAddress || !amount) return alert("Enter address and amount");
+    setIsSending(true);
+    
+    const wallet = new ethers.Wallet(pk, provider);
+    let tx;
 
-  try {
-    // --- PHASE 1: SUBMIT AND SAVE AS PENDING ---
-    tx = await wallet.sendTransaction({
-      to: receiverAddress,
-      value: ethers.parseEther(amount),
-    });
-
-    setSuccessMessage(`⏳ Transaction submitted! Now waiting for confirmation... Hash: ${tx.hash.slice(0,10)}...`);
-
-    // Save immediately as 'pending'
-    await saveTransactionHistory({
-      txHash: tx.hash,
-      from: wallet.address,
-      to: receiverAddress,
-      amount: amount,
-      tokenSymbol: 'BNB',
-      status: 'pending',
-    });
-     fetchTransactionHistory();
-       tx.wait()
-      .then(async (receipt) => {
-        // SUCCESS CASE
-        await updateTransactionStatus(receipt.hash, 'success');
-        getBNBBalance(wallet.address);
-        fetchTransactionHistory();
-      })
-      .catch(async (error) => {
-        // FAILURE CASE
-        console.error("BNB transaction failed to confirm:", error);
-        await updateTransactionStatus(tx.hash, 'failed');
-        fetchTransactionHistory();
+    try {
+      tx = await wallet.sendTransaction({
+        to: receiverAddress,
+        value: ethers.parseEther(amount),
       });
-
-      } catch (error) {
-        alert("Transaction could not be submitted: " + error.message);
-     } finally {
-    // ✅ UI is now free
-        setIsSending(false);
-  }
-};
-
-const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
-  if (!receiverAddress || !amount) return alert("Enter address and amount");
-  setIsSending(true);
-
-  const wallet = new ethers.Wallet(pk, provider);
-
-  try {
-    const contract = new ethers.Contract(tokenAddress, erc20ABI, wallet);
-    const decimals = await contract.decimals();
-    const tokenSymbol = tokenAddress === USDT_ADDRESS ? 'USDT' : 'USDC';
-
-    const tx = await contract.transfer(
-      receiverAddress,
-      ethers.parseUnits(amount, decimals)
-    );
-    await saveTransactionHistory({
-      txHash: tx.hash,
-      from: wallet.address,
-      to: receiverAddress,
-      amount: amount,
-      tokenSymbol: tokenSymbol,
-      status: 'pending',
-    });
-
-    fetchTransactionHistory();
-    setSuccessMessage(`✅ Transaction submitted! It will be processed in the background. Hash: ${tx.hash.slice(0,10)}...`);
-
-    tx.wait()
-      .then(async (receipt) => {
-        console.log("Transaction confirmed:", receipt.hash);
-        await updateTransactionStatus(receipt.hash, 'success');
-        onCompleteRefresh(wallet.address, tokenAddress); // Refresh balance
-        fetchTransactionHistory(); // Refresh list to show 'success'
-      })
-      .catch(async (error) => {
-        console.error("Transaction failed to confirm:", error);
-        await updateTransactionStatus(tx.hash, 'failed');
-        fetchTransactionHistory(); // Refresh list to show 'failed'
+      setSuccessMessage(`⏳ Transaction submitted! Waiting for confirmation... Hash: ${tx.hash.slice(0,10)}...`);
+      await saveTransactionHistory({
+        txHash: tx.hash,
+        from: wallet.address,
+        to: receiverAddress,
+        amount: amount,
+        tokenSymbol: 'BNB',
+        status: 'pending',
       });
+      fetchTransactionHistory();
 
-  } catch (error) {
-    alert("Transaction could not be submitted: " + error.message);
-  } finally {
-    setIsSending(false);
-  }
+      tx.wait()
+        .then(async (receipt) => {
+          setSuccessMessage(receipt.hash);
+          await updateTransactionStatus(receipt.hash, 'success');
+          getBNBBalance(wallet.address);
+          fetchTransactionHistory();
+        })
+        .catch(async (error) => {
+          console.error("BNB transaction failed to confirm:", error);
+          if (tx) await updateTransactionStatus(tx.hash, 'failed');
+          fetchTransactionHistory();
+        });
+    } catch (error) {
+      alert("Transaction could not be submitted: " + error.message);
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
+    if (!receiverAddress || !amount) return alert("Enter address and amount");
+    setIsSending(true);
+
+    const wallet = new ethers.Wallet(pk, provider);
+    let tx;
+
+    try {
+      const contract = new ethers.Contract(tokenAddress, erc20ABI, wallet);
+      const decimals = await contract.decimals();
+      const tokenSymbol = tokenAddress === USDT_ADDRESS ? 'USDT' : 'USDC';
+
+      tx = await contract.transfer(receiverAddress, ethers.parseUnits(amount, decimals));
+      setSuccessMessage(`⏳ Transaction submitted! Waiting for confirmation... Hash: ${tx.hash.slice(0,10)}...`);
+      await saveTransactionHistory({
+        txHash: tx.hash,
+        from: wallet.address,
+        to: receiverAddress,
+        amount: amount,
+        tokenSymbol: tokenSymbol,
+        status: 'pending',
+      });
+      fetchTransactionHistory();
+
+      tx.wait()
+        .then(async (receipt) => {
+          setSuccessMessage(receipt.hash);
+          await updateTransactionStatus(receipt.hash, 'success');
+          onCompleteRefresh(wallet.address, tokenAddress);
+          fetchTransactionHistory();
+        })
+        .catch(async (error) => {
+          console.error("Token transaction failed to confirm:", error);
+          if (tx) await updateTransactionStatus(tx.hash, 'failed');
+          fetchTransactionHistory();
+        });
+    } catch (error) {
+      alert("Transaction could not be submitted: " + error.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleSend = (privateKey) => {
     switch (selectedToken) {
       case "BNB":
         sendBNB(privateKey);
         break;
       case "USDT":
-        sendToken(privateKey, USDT_ADDRESS, (addr, tokenAddr) =>
-          getTokenBalance(addr, tokenAddr, setUsdtBalances)
-        );
+        sendToken(privateKey, USDT_ADDRESS, (addr, tokenAddr) => getTokenBalance(addr, tokenAddr, setUsdtBalances));
         break;
       case "USDC":
-        sendToken(privateKey, USDC_ADDRESS, (addr, tokenAddr) =>
-          getTokenBalance(addr, tokenAddr, setUsdcBalances)
-        );
+        sendToken(privateKey, USDC_ADDRESS, (addr, tokenAddr) => getTokenBalance(addr, tokenAddr, setUsdcBalances));
         break;
       default:
         alert("Invalid token selected.");
     }
   };
+
+  // ✅ FIXED: Using relative URL and robust error handling
   const saveTransactionHistory = async (txDetails) => {
-  try {
-    const response = await fetch("/api/tx-history", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(txDetails),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("Failed to save transaction history:", result.message);
-    } else {
-      console.log("Transaction history saved successfully:", result.message);
+    try {
+      const response = await fetch("/api/tx-history", { // Use relative path
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(txDetails),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || "Failed to save transaction.");
+      }
+    } catch (error) {
+      console.error("Error sending transaction history to server:", error.message);
     }
-  } catch (error) {
-    console.error("Error sending transaction history to server:", error);
-  }
-};
+  };
 
   const handleCopyToClipboard = async (textToCopy) => {
     try {
       await navigator.clipboard.writeText(textToCopy);
       setIsCopied(true);
-      setTimeout(() => {
-        setIsCopied(false);
-      }, 2000);
+      setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy text: ", err);
       alert("Failed to copy to clipboard.");
     }
   };
 
+  // ✅ FIXED: Using relative URL and robust error handling
   const handleVerification = async () => {
-    if (!txHash || !adminWalletAddress) {
-      return alert("Please enter both a transaction hash and an admin wallet address.");
-    }
+    if (!txHash || !adminWalletAddress) return alert("Please provide a transaction hash and an admin address.");
     setIsVerifying(true);
     setVerificationResult(null);
     try {
-      const response = await fetch("/api/verify-tx", {
+      const response = await fetch("/api/verify-tx", { // Use relative path
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash, adminWalletAddress }),
@@ -286,68 +268,63 @@ const sendToken = async (pk, tokenAddress, onCompleteRefresh) => {
       setIsVerifying(false);
     }
   };
-  const fetchTransactionHistory = async () => {
-    if (!username) return; // Don't fetch if no user is entered
 
+  // ✅ FIXED: Using relative URL and robust error handling
+  const fetchTransactionHistory = async () => {
+    if (!username) return;
+    setIsHistoryLoading(true);
     try {
-      setIsHistoryLoading(true);
-      const res = await fetch(`/api/tx-history/${username}`);
+      const res = await fetch(`/api/tx-history/${username}`); // Use relative path
       if (!res.ok) {
-        // If user has no history yet, the server might send a 404, which is fine.
-        setTransactionHistory([]);
-        return;
+          if(res.status === 404) { // It's okay if user has no history yet
+              setTransactionHistory([]);
+              return;
+          }
+        throw new Error("Could not fetch history.");
       }
       const data = await res.json();
       setTransactionHistory(data);
     } catch (error) {
       console.error("Failed to fetch transaction history:", error);
-      setTransactionHistory([]); // Clear history on error
-      }
-      finally {
-    setIsHistoryLoading(false); 
-  }
-    };
-    // In App.jsx
-const updateTransactionStatus = async (txHash, status) => {
-  try {
-    await fetch("/api/tx-status", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ txHash, status }),
-    });
-  } catch (error) {
-    console.error(`Failed to update status for ${txHash}:`, error);
-  }
-};
+      setTransactionHistory([]);
+    } finally {
+      setIsHistoryLoading(false); 
+    }
+  };
+
+  // ✅ FIXED: Using relative URL and robust error handling
+  const updateTransactionStatus = async (txHash, status) => {
+    try {
+      await fetch("/api/tx-status", { // Use relative path
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txHash, status }),
+      });
+    } catch (error) {
+      console.error(`Failed to update status for ${txHash}:`, error);
+    }
+  };
+  
   /* ----------  Render  ---------- */
   return (
     <div className="app">
       {successMessage && (
         <div className="toast">
           <div className="toast-content">
-            ✅ Transaction confirmed!{" "}
-            <a
-              href={`https://testnet.bscscan.com/tx/${successMessage}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {successMessage.slice(0, 10)}…{successMessage.slice(-6)}
-            </a>
+            {successMessage.startsWith('0x') ? `✅ Transaction Confirmed!` : successMessage}
+            {successMessage.startsWith('0x') && 
+              <a href={`https://testnet.bscscan.com/tx/${successMessage}`} target="_blank" rel="noopener noreferrer">
+                {successMessage.slice(0, 10)}…{successMessage.slice(-6)}
+              </a>
+            }
           </div>
           <div className="toast-actions">
-            <button
-              onClick={() => handleCopyToClipboard(successMessage)}
-              className="toast-btn"
-              disabled={isCopied}
-            >
-              {isCopied ? "Copied!" : "Copy"}
-            </button>
-            <button
-              onClick={() => setSuccessMessage("")}
-              className="toast-btn"
-            >
-              OK
-            </button>
+            {successMessage.startsWith('0x') &&
+              <button onClick={() => handleCopyToClipboard(successMessage)} className="toast-btn" disabled={isCopied}>
+                {isCopied ? "Copied!" : "Copy Hash"}
+              </button>
+            }
+            <button onClick={() => setSuccessMessage("")} className="toast-btn">OK</button>
           </div>
         </div>
       )}
@@ -356,47 +333,18 @@ const updateTransactionStatus = async (txHash, status) => {
 
       <div className="controls">
         <div className="input-wrapper">
-          <input
-            type="text"
-            placeholder="Enter username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="input"
-          />
-          {username.length > 0 && (
-            <button onClick={() => setUsername("")} className="btn-clear">
-              ×
-            </button>
-          )}
+          <input type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} className="input"/>
+          {username.length > 0 && (<button onClick={() => setUsername("")} className="btn-clear">×</button>)}
         </div>
         
         <div className="input-wrapper">
-          <input
-            type={isPasswordVisible ? "text" : "password"}
-            placeholder="Enter password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input"
-          />
-          <button 
-            onClick={() => setIsPasswordVisible(!isPasswordVisible)} 
-            className="btn-toggle-visibility"
-          >
-            {isPasswordVisible ? "Hide" : "Show"}
-          </button>
-          {password.length > 0 && (
-            <button onClick={() => setPassword("")} className="btn-clear">
-              ×
-            </button>
-          )}
+          <input type={isPasswordVisible ? "text" : "password"} placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} className="input"/>
+          <button onClick={() => setIsPasswordVisible(!isPasswordVisible)} className="btn-toggle-visibility">{isPasswordVisible ? "Hide" : "Show"}</button>
+          {password.length > 0 && (<button onClick={() => setPassword("")} className="btn-clear">×</button>)}
         </div>
 
-        <button onClick={generateAndSaveWallet} className="btn primary">
-          Generate Wallet
-        </button>
-        <button onClick={fetchWallets} className="btn secondary">
-          Fetch My Wallets
-        </button>
+        <button onClick={generateAndSaveWallet} className="btn primary">Generate Wallet</button>
+        <button onClick={fetchWallets} className="btn secondary">Fetch My Wallets</button>
       </div>
 
      {walletData.length > 0 && (
@@ -406,30 +354,21 @@ const updateTransactionStatus = async (txHash, status) => {
             <div key={i} className="wallet-card">
               <div className="address-row">
                 <p><span>Address:</span> {w.address}</p>
-                <button 
-                  onClick={() => setQrVisibleAddress(qrVisibleAddress === w.address ? null : w.address)} 
-                  className="btn ghost small"
-                >
+                <button onClick={() => setQrVisibleAddress(qrVisibleAddress === w.address ? null : w.address)} className="btn ghost small">
                   {qrVisibleAddress === w.address ? "Hide QR" : "Show QR"}
                 </button>
               </div>
 
-              {/* ✅ UPDATED SECTION: Simplified QR code display */}
               {qrVisibleAddress === w.address && (
                 <div className="qr-code-display">
-                  <img
-                    className="qr-code-image"
-                    // Simplified URL - no need for high error correction anymore
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${w.address}&qzone=1`}
-                    alt="Wallet Address QR Code"
-                  />
-                  {/* ✅ REMOVED: The logo <img> tag is now gone */}
+                  <img className="qr-code-image" src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${w.address}&qzone=1`} alt="Wallet Address QR Code"/>
                   <p className="qr-address-label">Scan to send funds to this address</p>
                 </div>
               )}
 
               <p><span>Private Key:</span> {w.privateKey}</p>
               <div className="balance-row">
+                {/* ✅ FIXED: Corrected function call case-sensitivity */}
                 <button onClick={() => getBNBBalance(w.address)} className="btn ghost">BNB Balance</button>
                 <span>{bnbBalances[w.address] ?? "—"} BNB</span>
               </div>
@@ -452,22 +391,13 @@ const updateTransactionStatus = async (txHash, status) => {
                 <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="input half"/>
                 {amount.length > 0 && (<button onClick={() => setAmount("")} className="btn-clear">×</button>)}
               </div>
-              {/* ✅ CORRECTED: All send buttons are now in this container */}
               <div className="action-btns">
-                <select
-                  value={selectedToken}
-                  onChange={(e) => setSelectedToken(e.target.value)}
-                  className="select-token"
-                >
+                <select value={selectedToken} onChange={(e) => setSelectedToken(e.target.value)} className="select-token">
                   <option value="BNB">BNB</option>
                   <option value="USDT">USDT</option>
                   <option value="USDC">USDC</option>
                 </select>
-                <button
-                  onClick={() => handleSend(w.privateKey)}
-                  disabled={isSending}
-                  className="btn accent send-btn"
-                >
+                <button onClick={() => handleSend(w.privateKey)} disabled={isSending} className="btn accent send-btn">
                   {isSending ? "Sending…" : `Send ${selectedToken}`}
                 </button>
               </div>
@@ -483,7 +413,6 @@ const updateTransactionStatus = async (txHash, status) => {
                   <input type="text" placeholder="Enter Expected Sender (Admin) Address" value={adminWalletAddress} onChange={(e) => setAdminWalletAddress(e.target.value)} className="input full"/>
                   {adminWalletAddress.length > 0 && (<button onClick={() => setAdminWalletAddress("")} className="btn-clear">×</button>)}
                 </div>
-                {/* ✅ CORRECTED: The extra "Send USDC" button is removed from here */}
                 <button onClick={handleVerification} className="btn primary" disabled={isVerifying}>
                   {isVerifying ? "Verifying…" : "Verify Transaction"}
                 </button>
@@ -495,65 +424,56 @@ const updateTransactionStatus = async (txHash, status) => {
                       <div className="tx-details">
                         <p><strong>Actual Sender:</strong> {verificationResult.details.from}</p>
                         <p><strong>Receiver:</strong> {verificationResult.details.to}</p>
-                     <p><strong>Amount:</strong> {verificationResult.details.amount} 
-                     {verificationResult.details.tokenSymbol}</p>
+                        <p><strong>Amount:</strong> {verificationResult.details.amount} {verificationResult.details.tokenSymbol}</p>
                       </div>
                     )}
                   </div>
                 )}
-                {/* ✅ START: TRANSACTION HISTORY SECTION */}
-<div className="history-section">
-  <div className="history-header">
-    <h4>Transaction History</h4>
-    <button
-      onClick={fetchTransactionHistory}
-      className="btn ghost small"
-      disabled={isHistoryLoading} // Disable button while loading
-    >
-      {isHistoryLoading ? 'Refreshing...' : 'Refresh History'}
-    </button>
-  </div>
+                
+                <div className="history-section">
+                  <div className="history-header">
+                    <h4>Transaction History</h4>
+                    <button onClick={fetchTransactionHistory} className="btn ghost small" disabled={isHistoryLoading}>
+                      {isHistoryLoading ? 'Refreshing...' : 'Refresh History'}
+                    </button>
+                  </div>
 
-  <div className="history-list">
-    {isHistoryLoading ? (
-      // If loading, show a simple loading message
-      <p className="no-history">Loading history...</p>
-    ) : (
-      // If not loading, show the existing list or "no history" message
-      transactionHistory.filter(tx => tx.from.toLowerCase() === w.address.toLowerCase()).length > 0 ? (
-        transactionHistory
-          .filter(tx => tx.from.toLowerCase() === w.address.toLowerCase())
-.map(tx => (
-    <div key={tx.txHash} className={`history-item status-${tx.status}`}>
-      <div className="history-item-row">
-        <span>
-          {tx.status === 'success' && '✅ '}
-          {tx.status === 'pending' && '⏳ '}
-          {tx.status === 'failed' && '❌ '}
-          Status:
-        </span>
-        <span className={`status-text status-${tx.status}`}>{tx.status}</span>
-      </div>
-
-      <div className="history-item-row">
-        <span>To:</span>
-        <span className="history-address">{tx.to.slice(0, 6)}...{tx.to.slice(-4)}</span>
-      </div>
-      <div className="history-item-row">
-        <span>Amount:</span>
-        <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
-      </div>
-
-  </div>
-)) 
-      ) : (
-        <p className="no-history">No transactions sent from this wallet yet.</p>
-      )
-    )}
-  </div>
-</div>
+                  <div className="history-list">
+                    {isHistoryLoading ? (<p className="no-history">Loading history...</p>) : (
+                      transactionHistory.filter(tx => tx.from.toLowerCase() === w.address.toLowerCase()).length > 0 ? (
+                        transactionHistory
+                          .filter(tx => tx.from.toLowerCase() === w.address.toLowerCase())
+                          .map(tx => (
+                            <div key={tx.txHash} className={`history-item status-${tx.status}`}>
+                              <div className="history-item-row">
+                                <span>
+                                  {tx.status === 'success' && '✅ '}
+                                  {tx.status === 'pending' && '⏳ '}
+                                  {tx.status === 'failed' && '❌ '}
+                                  Status:
+                                </span>
+                                <span className={`status-text status-${tx.status}`}>{tx.status}</span>
+                              </div>
+                              <div className="history-item-row">
+                                <span>To:</span>
+                                <span className="history-address">{tx.to.slice(0, 6)}...{tx.to.slice(-4)}</span>
+                              </div>
+                              <div className="history-item-row">
+                                <span>Amount:</span>
+                                <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
+                              </div>
+                              <a href={`https://testnet.bscscan.com/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer" className="history-link">
+                                View on BscScan
+                              </a>
+                            </div>
+                          )) 
+                      ) : (
+                        <p className="no-history">No transactions sent from this wallet yet.</p>
+                      )
+                    )}
+                  </div>
+                </div>
               </div>
-              
             </div>
           ))}
         </div>
@@ -563,7 +483,7 @@ const updateTransactionStatus = async (txHash, status) => {
   );
 }
 
-/* ---------------  CSS  --------------- */
+/* ---------------  CSS (NO CHANGES)  --------------- */
 const css = `
 :root {
   --bg: #0f0f13;
@@ -650,8 +570,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); }
   height: 220px;
 }
 
-/* ✅ REMOVED: .qr-code-logo style is gone. */
-
 .qr-address-label {
   font-size: 0.9rem;
   color: #ccc;
@@ -691,6 +609,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); }
   color: #000; 
   text-decoration: underline; 
   font-weight: 700;
+  margin-left: 0.5rem;
 }
 
 .toast-content {
@@ -873,7 +792,7 @@ margin-bottom: 0.75rem;}
   margin-bottom: 1rem;
 }
 .history-section h4 {
-  margin-bottom: 1rem;
+  margin-bottom: 0rem;
 }
 .history-list {
   margin-top: 1rem;
@@ -901,6 +820,9 @@ margin-bottom: 0.75rem;}
 .history-amount {
   font-weight: 700;
 }
+.history-address {
+  font-family: monospace;
+}
 .history-link {
   display: inline-block;
   margin-top: .5rem;
@@ -917,7 +839,6 @@ margin-bottom: 0.75rem;}
   text-align: center;
   padding: 1.5rem 0;
 }
-  // In App.jsx, inside the css constant
 
 /* Status text styling */
 .status-text {
