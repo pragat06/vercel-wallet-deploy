@@ -1,5 +1,5 @@
-/* App.jsx */
-import React, { useState, useEffect } from "react";
+// ✅ FIXED: Removed unused 'useEffect' import
+import React, { useState } from "react";
 import { ethers } from "ethers";
 
 /* ---------------  ABI & CONSTANTS  --------------- */
@@ -7,7 +7,7 @@ const erc20ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function transfer(address,uint256) returns (bool)",
   "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)", // Added for full token info
+  "function symbol() view returns (string)",
 ];
 const USDT_ADDRESS = "0x787a697324dba4ab965c58cd33c13ff5eea6295f";
 const USDC_ADDRESS = "0x342e3aA1248AB77E319e3331C6fD3f1F2d4B36B1"; 
@@ -39,8 +39,6 @@ export default function App() {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
 
   /* ----------  Handlers (Corrected for Vercel Deployment) ---------- */
-
-  // ✅ FIXED: Using relative URL and robust error handling
   const generateAndSaveWallet = async () => {
     if (!username || !password) return alert("Username and password are required!");
     try {
@@ -52,7 +50,7 @@ export default function App() {
         privateKey: wallet.privateKey,
         mnemonic: wallet.mnemonic.phrase,
       };
-      const res = await fetch("/api/wallet", { // Use relative path
+      const res = await fetch("/api/wallet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newWallet),
@@ -68,11 +66,10 @@ export default function App() {
     }
   };
 
-  // ✅ FIXED: Using relative URL and robust error handling
   const fetchWallets = async () => {
     if (!username || !password) return alert("Username and password are required!");
     try {
-      const res = await fetch(`/api/wallet/fetch`, { // Use relative path
+      const res = await fetch(`/api/wallet/fetch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -82,7 +79,7 @@ export default function App() {
         throw new Error(data.error || "Invalid username or password.");
       }
       setWalletData(data);
-      fetchTransactionHistory(); // Fetch history after getting wallets
+      fetchTransactionHistory();
     } catch (error) {
       console.error("Failed to fetch wallets:", error);
       alert(error.message);
@@ -214,10 +211,9 @@ export default function App() {
     }
   };
 
-  // ✅ FIXED: Using relative URL and robust error handling
   const saveTransactionHistory = async (txDetails) => {
     try {
-      const response = await fetch("/api/tx-history", { // Use relative path
+      const response = await fetch("/api/tx-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(txDetails),
@@ -242,13 +238,12 @@ export default function App() {
     }
   };
 
-  // ✅ FIXED: Using relative URL and robust error handling
   const handleVerification = async () => {
     if (!txHash || !adminWalletAddress) return alert("Please provide a transaction hash and an admin address.");
     setIsVerifying(true);
     setVerificationResult(null);
     try {
-      const response = await fetch("/api/verify-tx", { // Use relative path
+      const response = await fetch("/api/verify-tx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash, adminWalletAddress }),
@@ -269,14 +264,13 @@ export default function App() {
     }
   };
 
-  // ✅ FIXED: Using relative URL and robust error handling
   const fetchTransactionHistory = async () => {
     if (!username) return;
     setIsHistoryLoading(true);
     try {
-      const res = await fetch(`/api/tx-history/${username}`); // Use relative path
+      const res = await fetch(`/api/tx-history/${username}`);
       if (!res.ok) {
-          if(res.status === 404) { // It's okay if user has no history yet
+          if(res.status === 404) {
               setTransactionHistory([]);
               return;
           }
@@ -292,10 +286,9 @@ export default function App() {
     }
   };
 
-  // ✅ FIXED: Using relative URL and robust error handling
   const updateTransactionStatus = async (txHash, status) => {
     try {
-      await fetch("/api/tx-status", { // Use relative path
+      await fetch("/api/tx-status", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash, status }),
@@ -368,7 +361,6 @@ export default function App() {
 
               <p><span>Private Key:</span> {w.privateKey}</p>
               <div className="balance-row">
-                {/* ✅ FIXED: Corrected function call case-sensitivity */}
                 <button onClick={() => getBNBBalance(w.address)} className="btn ghost">BNB Balance</button>
                 <span>{bnbBalances[w.address] ?? "—"} BNB</span>
               </div>
