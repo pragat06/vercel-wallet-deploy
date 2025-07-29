@@ -530,14 +530,6 @@ const updateTransactionStatus = async (txHash, status) => {
         <span className="history-amount">{tx.amount} {tx.tokenSymbol}</span>
       </div>
 
-    <a 
-     href={`https://testnet.bscscan.com/tx/${tx.txHash}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="history-link"
-    >
-      View on BscScan
-    </a>
   </div>
 )) 
       ) : (
